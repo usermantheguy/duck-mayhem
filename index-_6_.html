@@ -1,0 +1,1525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Duck Mayhem</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #0f172a; font-family: 'Inter', sans-serif; }
+        canvas { display: block; touch-action: none; }
+        .ui-panel { backdrop-filter: blur(8px); background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .shop-btn:hover { background: rgba(255, 255, 255, 0.1); transform: scale(1.05); }
+        .shop-btn:active { transform: scale(0.95); }
+        .utility-slot { border: 2px solid rgba(255, 255, 255, 0.2); transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .utility-slot.active { border-color: #f87171; box-shadow: 0 0 15px rgba(248, 113, 113, 0.4); transform: scale(1.1); }
+        .modal-enter { animation: modalPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        @keyframes modalPop { from { opacity: 0; transform: scale(0.9) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        .rainbow-text { background: linear-gradient(to right, #ef4444, #f59e0b, #10b981, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .wiki-duck-preview { transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); cursor: pointer; }
+        .wiki-duck-preview:active { transform: scale(1.2) rotate(10deg); }
+        .blood-btn { background: #7f1d1d; border-bottom: 4px solid #450a0a; transition: all 0.1s; }
+        .blood-btn:active { transform: translateY(2px); border-bottom-width: 2px; }
+        .rare-flash { animation: flash 0.5s ease-out; }
+        @keyframes flash { 0% { box-shadow: 0 0 0px white; } 50% { box-shadow: 0 0 40px white; } 100% { box-shadow: 0 0 0px white; } }
+    </style>
+</head>
+<body>
+
+    <!-- UI Overlay -->
+    <div id="game-ui" class="fixed top-4 left-4 z-10 pointer-events-none flex flex-col gap-3">
+        <div class="ui-panel p-3 rounded-xl shadow-2xl pointer-events-auto flex items-center gap-4">
+            <div class="flex items-center gap-2 text-white">
+                <i data-lucide="crosshair" class="w-5 h-5 text-red-400"></i>
+                <div>
+                    <h1 class="text-lg font-bold leading-tight">Duck Mayhem</h1>
+                    <p class="text-[9px] text-slate-400 uppercase tracking-widest font-bold">Tactical Extermination</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="flex gap-2 pointer-events-auto">
+            <button id="shop-toggle" class="ui-panel p-3 rounded-xl shadow-2xl shop-btn text-yellow-400 transition-transform">
+                <i data-lucide="shopping-cart" class="w-6 h-6"></i>
+            </button>
+            <button id="call-toggle" class="ui-panel hidden p-3 rounded-xl shadow-2xl shop-btn text-blue-400 transition-transform relative">
+                <i data-lucide="megaphone" class="w-6 h-6"></i>
+                <div id="call-cd-overlay" class="absolute inset-0 bg-slate-900/80 rounded-xl flex items-center justify-center text-[10px] font-bold text-white hidden">20s</div>
+            </button>
+            <button id="debug-toggle" class="ui-panel hidden p-3 rounded-xl shadow-2xl shop-btn text-red-500 transition-transform">
+                <i data-lucide="terminal" class="w-6 h-6"></i>
+            </button>
+            <button id="wiki-toggle" class="ui-panel p-3 rounded-xl shadow-2xl shop-btn text-emerald-400 transition-transform">
+                <i data-lucide="book-open" class="w-6 h-6"></i>
+            </button>
+        </div>
+
+        <div class="ui-panel p-3 rounded-xl shadow-2xl pointer-events-auto flex gap-4 text-white">
+            <div class="flex flex-col">
+                <span class="text-[9px] text-slate-400 uppercase font-bold">Confirmed Kills</span>
+                <span id="score" class="text-xl font-mono font-black text-red-500">000</span>
+            </div>
+            <div class="w-px h-8 bg-slate-700"></div>
+            <div class="flex flex-col">
+                <span class="text-[9px] text-slate-400 uppercase font-bold">On Screen</span>
+                <span id="target-count" class="text-xl font-mono font-black text-yellow-500">0</span>
+            </div>
+            <div class="w-px h-8 bg-slate-700"></div>
+            <div class="flex flex-col">
+                <span class="text-[9px] text-slate-400 uppercase font-bold">Coins</span>
+                <span id="coins" class="text-xl font-mono font-black text-yellow-400">0</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Win Screen -->
+    <div id="win-screen" class="hidden fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center text-center p-8">
+        <h1 id="win-text" class="text-white text-2xl md:text-4xl font-serif mb-12 max-w-2xl leading-relaxed"></h1>
+        <div class="flex flex-col gap-4 w-64">
+            <button onclick="location.reload()" class="blood-btn text-white py-3 px-6 rounded-lg font-bold uppercase tracking-widest hover:bg-red-900">Go again..?</button>
+            <a href="https://thepossiblequiz.vercel.app" target="_blank" class="bg-slate-800 text-slate-300 py-2 px-6 rounded-lg font-bold text-sm hover:bg-slate-700">or maybe try this</a>
+            <a href="https://thepossiblequiz2.vercel.app" target="_blank" class="bg-slate-900 text-slate-500 py-2 px-6 rounded-lg font-bold text-xs hover:text-slate-400">try this after trying the first one</a>
+        </div>
+    </div>
+
+    <!-- Debug Modal -->
+    <div id="debug-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div class="ui-panel p-6 rounded-2xl w-80 text-white flex flex-col gap-4 modal-enter border-red-500/50">
+            <div class="flex justify-between items-center">
+                <h2 class="text-xl font-bold text-red-400">Control Panel</h2>
+                <button id="close-debug" class="text-slate-400 hover:text-white"><i data-lucide="x"></i></button>
+            </div>
+            <div class="flex flex-col gap-3">
+                <div class="flex gap-2">
+                    <input id="debug-coins-input" type="number" placeholder="Amt" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm outline-none">
+                    <button onclick="addDebugCoins()" class="bg-red-600 px-3 rounded font-bold text-xs">Add Coins</button>
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-[10px] uppercase font-bold text-slate-500">Force Species</label>
+                    <select id="debug-species" class="bg-slate-900 border border-slate-700 rounded p-2 text-xs">
+                        <option value="random">Random</option>
+                        <option value="duck">Duck Only</option>
+                        <option value="penguin">Penguin Only</option>
+                    </select>
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-[10px] uppercase font-bold text-slate-500">Force Stage</label>
+                    <select id="debug-stage" class="bg-slate-900 border border-slate-700 rounded p-2 text-xs">
+                        <option value="random">Random</option>
+                        <option value="adult">Adult Only</option>
+                        <option value="baby">Baby Only</option>
+                    </select>
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-[10px] uppercase font-bold text-slate-500">Force Mutation (Hold Ctrl for multiple)</label>
+                    <select id="debug-mutation" multiple class="bg-slate-900 border border-slate-700 rounded p-2 text-xs h-32">
+                        <option value="gold">Gold</option>
+                        <option value="rainbow">Rainbow</option>
+                        <option value="flat">Flat</option>
+                        <option value="giant">Giant</option>
+                        <option value="tiny">Tiny</option>
+                        <option value="fire">Flaming</option>
+                        <option value="puddle">Melted</option>
+                    </select>
+                    <p class="text-[9px] text-red-300 italic">Gold/Rainbow cannot stack.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shop Modal -->
+    <div id="shop-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div class="ui-panel p-6 rounded-2xl w-80 text-white flex flex-col gap-4 modal-enter">
+            <div class="flex justify-between items-center">
+                <h2 class="text-xl font-bold">Armory</h2>
+                <button id="close-shop" class="text-slate-400 hover:text-white"><i data-lucide="x"></i></button>
+            </div>
+            <div class="flex flex-col gap-3 max-h-[60vh] overflow-y-auto pr-2">
+                <button onclick="buyItem('win')" class="flex items-center justify-between p-3 rounded-xl bg-red-900/30 border border-red-500/30 hover:bg-red-900/50 transition active:scale-95">
+                    <div class="flex items-center gap-3">
+                        <i data-lucide="trophy" class="text-yellow-400"></i>
+                        <div class="text-left">
+                            <p class="font-bold">Victory</p>
+                            <p class="text-[10px] text-red-200">End the mayhem</p>
+                        </div>
+                    </div>
+                    <span class="font-bold text-yellow-400">1Mc</span>
+                </button>
+                <button id="btn-autoclick" onclick="buyItem('autoclick')" class="flex items-center justify-between p-3 rounded-xl bg-slate-800/50 hover:bg-slate-700/50 transition active:scale-95">
+                    <div class="flex items-center gap-3">
+                        <i data-lucide="mouse-pointer-click" class="text-indigo-400"></i>
+                        <div class="text-left">
+                            <p class="font-bold">Autoclicker</p>
+                            <p id="autoclick-desc" class="text-[10px] text-slate-400">Clicks 1 duck/sec</p>
+                        </div>
+                    </div>
+                    <span id="autoclick-cost" class="font-bold text-yellow-400">1500c</span>
+                </button>
+                <button id="btn-spawnrate" onclick="buyItem('spawnrate')" class="flex items-center justify-between p-3 rounded-xl bg-slate-800/50 hover:bg-slate-700/50 transition active:scale-95">
+                    <div class="flex items-center gap-3">
+                        <i data-lucide="zap" class="text-cyan-400"></i>
+                        <div class="text-left">
+                            <p class="font-bold">Rapid Spawn</p>
+                            <p id="spawnrate-desc" class="text-[10px] text-slate-400">Spawns 1 duck/sec</p>
+                        </div>
+                    </div>
+                    <span id="spawnrate-cost" class="font-bold text-yellow-400">1500c</span>
+                </button>
+                <button onclick="buyItem('bazooka')" class="flex items-center justify-between p-3 rounded-xl bg-slate-800/50 hover:bg-slate-700/50 transition active:scale-95">
+                    <div class="flex items-center gap-3">
+                        <i data-lucide="bomb" class="text-red-400"></i>
+                        <div class="text-left">
+                            <p class="font-bold">Bazooka</p>
+                            <p class="text-[10px] text-slate-400">Massive AoE damage</p>
+                        </div>
+                    </div>
+                    <span class="font-bold text-yellow-400">10c</span>
+                </button>
+                <button id="btn-hammer" onclick="buyItem('hammer')" class="flex items-center justify-between p-3 rounded-xl bg-slate-800/50 hover:bg-slate-700/50 transition active:scale-95">
+                    <div class="flex items-center gap-3">
+                        <i data-lucide="hammer" class="text-orange-400"></i>
+                        <div class="text-left">
+                            <p class="font-bold">Hammer</p>
+                            <p class="text-[10px] text-slate-400">Flatten ducks for 5x reward</p>
+                        </div>
+                    </div>
+                    <span class="font-bold text-yellow-400">500c</span>
+                </button>
+                <button onclick="buyItem('goldPaint')" class="flex items-center justify-between p-3 rounded-xl bg-slate-800/50 hover:bg-slate-700/50 transition active:scale-95">
+                    <div class="flex items-center gap-3">
+                        <i data-lucide="palette" class="text-yellow-400"></i>
+                        <div class="text-left">
+                            <p class="font-bold">Gold Paint</p>
+                            <p class="text-[10px] text-slate-400">Force Midas variant (1 use)</p>
+                        </div>
+                    </div>
+                    <span class="font-bold text-yellow-400">500c</span>
+                </button>
+                <button onclick="buyItem('rainbowPaint')" class="flex items-center justify-between p-3 rounded-xl bg-slate-800/50 hover:bg-slate-700/50 transition active:scale-95">
+                    <div class="flex items-center gap-3">
+                        <i data-lucide="sparkles" class="text-purple-400"></i>
+                        <div class="text-left">
+                            <p class="font-bold">Rainbow Paint</p>
+                            <p class="text-[10px] text-slate-400">Force Rainbow variant (1 use)</p>
+                        </div>
+                    </div>
+                    <span class="font-bold text-yellow-400">2500c</span>
+                </button>
+                <button id="btn-call" onclick="buyItem('call')" class="flex items-center justify-between p-3 rounded-xl bg-slate-800/50 hover:bg-slate-700/50 transition active:scale-95">
+                    <div class="flex items-center gap-3">
+                        <i data-lucide="megaphone" class="text-blue-400"></i>
+                        <div class="text-left">
+                            <p class="font-bold">Call Tool</p>
+                            <p class="text-[10px] text-slate-400">Special summon abilities</p>
+                        </div>
+                    </div>
+                    <span class="font-bold text-yellow-400">300c</span>
+                </button>
+                <button id="btn-device" onclick="buyItem('device')" class="flex items-center justify-between p-3 rounded-xl bg-slate-800/50 hover:bg-slate-700/50 transition active:scale-95">
+                    <div class="flex items-center gap-3">
+                        <i data-lucide="cpu" class="text-blue-400"></i>
+                        <div class="text-left">
+                            <p class="font-bold">BabyDevice100</p>
+                            <p class="text-[10px] text-slate-400">+5% Baby Chance (<span id="device-count">0</span>/10)</p>
+                        </div>
+                    </div>
+                    <span class="font-bold text-yellow-400">20c</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Duckipedia Modal -->
+    <div id="wiki-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div class="ui-panel p-6 rounded-2xl w-96 max-h-[80vh] overflow-y-auto text-white flex flex-col gap-4 modal-enter">
+            <div class="flex justify-between items-center sticky top-0 bg-slate-900/90 py-2 z-10">
+                <h2 class="text-xl font-bold flex items-center gap-2"><i data-lucide="book-open" class="text-emerald-400"></i> Duckipedia</h2>
+                <button id="close-wiki" class="text-slate-400 hover:text-white"><i data-lucide="x"></i></button>
+            </div>
+            <div class="flex flex-col gap-4">
+                <div class="p-3 rounded-xl bg-slate-800/40 border border-slate-700 flex gap-4 items-center">
+                    <canvas width="60" height="60" class="wiki-duck-preview" data-type="common" onclick="previewDuckSound()"></canvas>
+                    <div>
+                        <h3 class="font-bold text-emerald-400">Common Duck</h3>
+                        <p class="text-xs text-slate-300">Standard issue mallard. 1 coin reward.</p>
+                    </div>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-800/40 border border-slate-700 flex gap-4 items-center">
+                    <canvas width="60" height="60" class="wiki-duck-preview" data-type="penguin" onclick="previewDuckSound('low')"></canvas>
+                    <div>
+                        <h3 class="font-bold text-sky-400">Emperor Penguin</h3>
+                        <p class="text-xs text-slate-300">0.1% Rare species. Worth 50,000c.</p>
+                    </div>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-800/40 border border-slate-700 flex gap-4 items-center">
+                    <canvas width="60" height="60" class="wiki-duck-preview" data-type="baby" onclick="previewDuckSound('high')"></canvas>
+                    <div>
+                        <h3 class="font-bold text-yellow-200">Baby Duck (Stage)</h3>
+                        <p class="text-xs text-slate-300">Smaller, faster. 2x reward base. All mutations can apply to babies.</p>
+                    </div>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-800/40 border border-blue-400/50 shadow-[0_0_10px_rgba(96,165,250,0.2)] flex gap-4 items-center">
+                    <canvas width="60" height="60" class="wiki-duck-preview" data-type="giant" onclick="previewDuckSound('low')"></canvas>
+                    <div>
+                        <h3 class="font-bold text-blue-400">Giant (Mutation)</h3>
+                        <p class="text-xs text-slate-300">A 1/5 chance massive unit. Worth 2x total value. Slower movement.</p>
+                    </div>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-800/40 border border-pink-400/50 shadow-[0_0_10px_rgba(244,114,182,0.2)] flex gap-4 items-center">
+                    <canvas width="60" height="60" class="wiki-duck-preview" data-type="tiny" onclick="previewDuckSound('tiny')"></canvas>
+                    <div>
+                        <h3 class="font-bold text-pink-400">Tiny (Mutation)</h3>
+                        <p class="text-xs text-slate-300">A 1/50 chance microscopic unit. Worth 0.5x total value. Harder to hit.</p>
+                    </div>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-800/40 border border-yellow-500/50 shadow-[0_0_10px_rgba(234,179,8,0.2)] flex gap-4 items-center">
+                    <canvas width="60" height="60" class="wiki-duck-preview" data-type="gold" onclick="previewDuckSound('shiny')"></canvas>
+                    <div>
+                        <h3 class="font-bold text-yellow-400">Midas Touched</h3>
+                        <p class="text-xs text-slate-300">A rare golden variant. Worth 5x value. Mutually exclusive with Rainbow.</p>
+                    </div>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-800/40 border border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.3)] flex gap-4 items-center">
+                    <canvas width="60" height="60" class="wiki-duck-preview" data-type="rainbow" onclick="previewDuckSound('magic')"></canvas>
+                    <div>
+                        <h3 class="font-bold rainbow-text">Rainbow Duck</h3>
+                        <p class="text-xs text-slate-300">An exceptionally rare legendary variant. Worth 25x value. Mutually exclusive with Gold.</p>
+                    </div>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-800/40 border border-orange-500/50 shadow-[0_0_15px_rgba(234,88,12,0.3)] flex gap-4 items-center">
+                    <canvas width="60" height="60" class="wiki-duck-preview" data-type="fire" onclick="previewDuckSound('fire')"></canvas>
+                    <div>
+                        <h3 class="font-bold text-orange-500">Flaming Duck</h3>
+                        <p class="text-xs text-slate-300 italic">Not naturally spawned. Highly unstable and erratic movement. Worth 2x total value.</p>
+                    </div>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-800/40 border border-orange-400/50 flex gap-4 items-center">
+                    <canvas width="60" height="60" class="wiki-duck-preview" data-type="flat" onclick="previewDuckSound('flat')"></canvas>
+                    <div>
+                        <h3 class="font-bold text-orange-400 italic">Flattened Duck</h3>
+                        <p class="text-xs text-slate-300">Hit with a hammer. Worth 5x the current total value of the duck.</p>
+                    </div>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-800/40 border border-orange-900/50 flex gap-4 items-center">
+                    <canvas width="60" height="60" class="wiki-duck-preview" data-type="puddle" onclick="previewDuckSound('flat')"></canvas>
+                    <div>
+                        <h3 class="font-bold text-orange-900">Melted Puddle</h3>
+                        <p class="text-xs text-slate-300">A tragic byproduct of extreme solar exposure. Completely immobile. Worth 10x total value.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Call Menu Modal -->
+    <div id="call-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+        <div class="ui-panel p-6 rounded-2xl w-80 text-white flex flex-col gap-4 modal-enter border-blue-500/30">
+            <div class="flex justify-between items-center">
+                <h2 class="text-xl font-bold flex items-center gap-2"><i data-lucide="megaphone" class="text-blue-400"></i> Call Control</h2>
+                <button id="close-call" class="text-slate-400 hover:text-white"><i data-lucide="x"></i></button>
+            </div>
+            <div class="flex flex-col gap-3">
+                <div class="flex flex-col gap-2 p-3 rounded-xl bg-slate-800/50 border border-slate-700">
+                    <label class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Mutation Injector</label>
+                    <select id="mutation-selector" class="bg-slate-900 text-xs text-blue-300 border border-blue-500/30 rounded p-2 outline-none">
+                        <option value="none">Standard Swarm (Free)</option>
+                        <option value="baby">Baby Mutation (+100c)</option>
+                        <option value="gold">Midas Mutation (+250c)</option>
+                        <option value="rainbow">Prismatic Mutation (+3000c)</option>
+                        <option value="flat">Compacted Mutation (+300c)</option>
+                    </select>
+                </div>
+                <button id="swarm-btn" onclick="triggerCall('swarm')" class="flex flex-col p-4 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/20 transition active:scale-95 disabled:opacity-50 disabled:grayscale">
+                    <span class="font-bold text-lg">Summon Swarm</span>
+                    <span class="text-xs text-blue-300">Instantly calls 40 ducks</span>
+                </button>
+                <button onclick="triggerCall('upgrade')" class="flex items-center justify-between p-4 rounded-xl bg-slate-800/50 hover:bg-slate-700/50 border border-slate-600/20 transition active:scale-95">
+                    <div class="text-left">
+                        <p class="font-bold">Increase Capacity</p>
+                        <p class="text-[10px] text-slate-400">Current Max: <span id="max-cap-label">7</span></p>
+                    </div>
+                    <span class="font-bold text-yellow-400"><span id="cap-cost">10</span>c</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Utility Slots -->
+    <div class="fixed top-4 right-4 z-10 flex flex-col gap-2">
+        <div id="slot-bazooka" class="utility-slot hidden w-14 h-14 ui-panel rounded-xl flex items-center justify-center text-red-400 cursor-pointer pointer-events-auto">
+            <div class="relative">
+                <i data-lucide="rocket" class="w-8 h-8"></i>
+                <span id="bazooka-count" class="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold px-1.5 rounded-full border border-white/20">0</span>
+            </div>
+        </div>
+        <div id="slot-goldPaint" class="utility-slot hidden w-14 h-14 ui-panel rounded-xl flex items-center justify-center text-yellow-400 cursor-pointer pointer-events-auto">
+            <div class="relative">
+                <i data-lucide="palette" class="w-8 h-8"></i>
+                <span id="goldPaint-count" class="absolute -top-2 -right-2 bg-yellow-500 text-white text-[10px] font-bold px-1.5 rounded-full border border-white/20">0</span>
+            </div>
+        </div>
+        <div id="slot-rainbowPaint" class="utility-slot hidden w-14 h-14 ui-panel rounded-xl flex items-center justify-center text-purple-400 cursor-pointer pointer-events-auto">
+            <div class="relative">
+                <i data-lucide="sparkles" class="w-8 h-8"></i>
+                <span id="rainbowPaint-count" class="absolute -top-2 -right-2 bg-purple-500 text-white text-[10px] font-bold px-1.5 rounded-full border border-white/20">0</span>
+            </div>
+        </div>
+        <div id="slot-hammer" class="utility-slot hidden w-14 h-14 ui-panel rounded-xl flex items-center justify-center text-orange-400 cursor-pointer pointer-events-auto">
+            <i data-lucide="hammer" class="w-8 h-8"></i>
+        </div>
+    </div>
+
+    <div id="footer-tip" class="fixed bottom-4 right-4 z-10 ui-panel p-2 rounded-lg text-slate-300 text-[11px] flex items-center gap-2 cursor-pointer pointer-events-auto hover:text-white transition">
+        <i data-lucide="mouse-pointer-2" class="w-3 h-3"></i>
+        <span>Click to eliminate target</span>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        // Initialization & Audio Context Setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const countEl = document.getElementById('target-count');
+        const coinsEl = document.getElementById('coins');
+        const deviceCountEl = document.getElementById('device-count');
+        const bazookaCountEl = document.getElementById('bazooka-count');
+        const goldPaintCountEl = document.getElementById('goldPaint-count');
+        const rainbowPaintCountEl = document.getElementById('rainbowPaint-count');
+        
+        let width, height, lastTime = 0;
+        let score = 0;
+        let coins = 0;
+        let babyChance = 0.2;
+        let deviceCount = 0;
+        let audioCtx = null;
+        
+        let bazookaAmmo = 0;
+        let isBazookaActive = false;
+        let goldPaintAmmo = 0;
+        let isGoldPaintActive = false;
+        let rainbowPaintAmmo = 0;
+        let isRainbowPaintActive = false;
+        let hasHammer = false;
+        let isHammerActive = false;
+        let hasCallTool = false;
+        let spawnCap = 7;
+        let spawnCapCost = 10;
+        
+        let swarmCooldown = 0; // ms
+        let sunCooldown = 0;
+
+        let autoClickAmount = 0; // Ducks clicked per second
+        let autoClickCost = 1500;
+        let autoClickTimer = 0;
+
+        let spawnRateAmount = 0; // Bonus ducks per second
+        let spawnRateCost = 1500;
+        let spawnRateTimer = 0;
+
+        const ducks = [];
+        const particles = [];
+        const puddles = [];
+        const flowers = [];
+        const clouds = Array.from({ length: 5 }, () => ({
+            x: Math.random() * window.innerWidth,
+            y: Math.random() * window.innerHeight * 0.4,
+            s: 0.2 + Math.random() * 0.5,
+            w: 100 + Math.random() * 100
+        }));
+
+        const treeVariations = [];
+
+        // Generate Flowers once
+        function initFlowers() {
+            for(let i=0; i<15; i++) {
+                flowers.push({
+                    x: Math.random() * window.innerWidth,
+                    y: window.innerHeight * 0.62 + Math.random() * (window.innerHeight * 0.3),
+                    color: ['#f87171', '#fbbf24', '#c084fc', '#f472b6'][Math.floor(Math.random()*4)],
+                    size: 2 + Math.random() * 3
+                });
+            }
+        }
+
+        function initTrees() {
+            treeVariations.length = 0;
+            const treeCount = 12;
+            for(let i=0; i<treeCount; i++) {
+                treeVariations.push({
+                    x: (width / treeCount) * i + (Math.random() * 20 - 10),
+                    y: height * 0.58 + (Math.random() * 5),
+                    layers: 2 + Math.floor(Math.random() * 3),
+                    width: 35 + Math.random() * 20,
+                    height: 35 + Math.random() * 25,
+                    trunkWidth: 4 + Math.random() * 4,
+                    color: ['#14532d', '#166534', '#064e3b', '#1e3a1e'][Math.floor(Math.random()*4)],
+                    trunkColor: ['#2d1a0a', '#422006', '#27160c'][Math.floor(Math.random()*3)],
+                    scale: 0.8 + Math.random() * 0.4
+                });
+            }
+        }
+
+        // --- Audio System (Web Audio API) ---
+        function initAudio() {
+            if (audioCtx) return;
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        function previewDuckSound(type) {
+            initAudio();
+            playUISound('click');
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            let freq = 400;
+            if (type === 'high') freq = 800;
+            if (type === 'low') freq = 200;
+            if (type === 'tiny') freq = 1200;
+            if (type === 'shiny') freq = 600;
+            if (type === 'magic') freq = 1000;
+            if (type === 'flat') freq = 200;
+            if (type === 'fire') freq = 500;
+
+            osc.type = (type === 'magic') ? 'triangle' : 'sine';
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(freq * 0.5, audioCtx.currentTime + 0.2);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.2);
+        }
+
+        function playUISound(type) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (type === 'click') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.1);
+            } else if (type === 'buy') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(880, audioCtx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            } else if (type === 'select') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(300, audioCtx.currentTime + 0.05);
+                gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.1);
+            } else if (type === 'hammer') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+            } else if (type === 'call') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(600, audioCtx.currentTime + 0.1);
+                osc.frequency.linearRampToValueAtTime(400, audioCtx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+            } else if (type === 'fire') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(800, audioCtx.currentTime + 0.3);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+            } else if (type === 'melt') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(50, audioCtx.currentTime + 0.5);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
+            } else if (type === 'rare_spawn') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.1);
+                osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            }
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.5);
+        }
+
+        function playExplosionSound(intensity = 1.0) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(150 * intensity, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5 * intensity);
+            
+            gain.gain.setValueAtTime(0.5 * intensity, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5 * intensity);
+            
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.5 * intensity);
+        }
+
+        // --- Duck Entity ---
+        class Duck {
+            constructor(isSwarm = false, forcedMutation = 'none') {
+                this.reset(isSwarm, forcedMutation);
+            }
+
+            reset(isSwarm = false, forcedMutation = 'none') {
+                const debugSpecies = document.getElementById('debug-species').value;
+                const debugStage = document.getElementById('debug-stage').value;
+                const debugMutationSelect = document.getElementById('debug-mutation');
+                const selectedMutations = Array.from(debugMutationSelect.selectedOptions).map(o => o.value);
+
+                // Species Logic
+                if (debugSpecies === 'penguin') this.isPenguin = true;
+                else if (debugSpecies === 'duck') this.isPenguin = false;
+                else this.isPenguin = Math.random() < 0.001; // 0.1% chance
+
+                // Stage Logic
+                if (debugStage === 'baby') this.isBaby = true;
+                else if (debugStage === 'adult') this.isBaby = false;
+                else this.isBaby = forcedMutation === 'baby' || Math.random() < babyChance;
+                
+                // Mutation Rolls
+                const variantRoll = Math.random();
+                const giantRoll = Math.random();
+                const tinyRoll = Math.random();
+
+                // Forced overrides from debug or swarm calls
+                const forceGold = selectedMutations.includes('gold') || forcedMutation === 'gold';
+                const forceRainbow = selectedMutations.includes('rainbow') || forcedMutation === 'rainbow';
+                const forceGiant = selectedMutations.includes('giant');
+                const forceTiny = selectedMutations.includes('tiny');
+                const forceFlat = selectedMutations.includes('flat') || forcedMutation === 'flat';
+                const forceFire = selectedMutations.includes('fire');
+                const forcePuddle = selectedMutations.includes('puddle');
+
+                this.isRainbow = forceRainbow || (!forceGold && variantRoll < 0.01);
+                this.isGolden = forceGold || (!this.isRainbow && variantRoll < 0.05);
+                
+                // Audio visual rare trigger
+                if ((this.isRainbow || this.isGolden || this.isPenguin) && isSwarm === false) {
+                    playUISound('rare_spawn');
+                    document.getElementById('game-ui').classList.add('rare-flash');
+                    setTimeout(() => document.getElementById('game-ui').classList.remove('rare-flash'), 500);
+                }
+
+                // Giants and Tiny can stack with others
+                this.isGiant = forceGiant || giantRoll < 0.2;
+                this.isTiny = forceTiny || tinyRoll < 0.02; // 1/50
+                
+                // Mutually exclusive: Giant and Tiny (Giant takes priority)
+                if (this.isGiant) this.isTiny = false;
+
+                this.baseRadius = (this.isBaby ? 12 : 24) + Math.random() * (this.isBaby ? 4 : 10);
+                this.radius = this.baseRadius;
+                if (this.isGiant) this.radius *= 2.0;
+                if (this.isTiny) this.radius *= 0.4;
+                if (this.isPenguin) this.radius *= 1.4;
+
+                this.x = isSwarm ? (-this.radius * 3 - Math.random() * 800) : -this.radius * 3;
+                
+                // SPAWN AREA FIX: Only Grass (not flying in sky)
+                // Grass starts at height * 0.6. Bottom ends at height * 0.9.
+                this.y = height * 0.65 + Math.random() * (height * 0.22);
+                
+                this.baseSpeed = (this.isBaby ? 1.2 : 0.8) + Math.random() * 1.5;
+                if (this.isGolden) this.baseSpeed *= 1.2;
+                if (this.isRainbow) this.baseSpeed *= 1.5;
+                if (this.isGiant) this.baseSpeed *= 0.6;
+                if (this.isTiny) this.baseSpeed *= 1.4;
+                if (this.isPenguin) this.baseSpeed *= 0.5;
+
+                this.speed = this.baseSpeed;
+                this.wobble = 0;
+                this.wobbleSpeed = (this.isBaby ? 0.08 : 0.04) + Math.random() * 0.06;
+                
+                this.updateColors();
+
+                this.isDead = false;
+                this.state = 'walking';
+                this.stateTimer = 0;
+                this.legCycle = 0;
+                this.onScreen = false;
+                this.isFlattened = forceFlat;
+                this.isPuddle = forcePuddle;
+                this.isSwarmMember = isSwarm;
+
+                this.onFire = forceFire;
+                this.firePanicTimer = forceFire ? 8000 : 0;
+                this.quenchTimer = 0;
+                this.fireTargetAngle = Math.random() * Math.PI * 2;
+                this.fireTargetTimer = 0;
+
+                this.meltProgress = 0;
+                this.isMelting = false;
+            }
+
+            updateColors() {
+                this.bodyColor = this.isBaby ? '#fde047' : '#57534e';
+                this.headColor = this.isBaby ? '#fde047' : '#064e3b';
+                
+                if (this.isPenguin) {
+                    this.bodyColor = '#1e293b';
+                    this.headColor = '#1e293b';
+                }
+
+                if (this.isGolden) {
+                    this.bodyColor = '#fbbf24';
+                    this.headColor = '#f59e0b';
+                }
+            }
+
+            update(dt) {
+                this.stateTimer -= dt;
+                
+                const pondX = width * 0.3;
+                const pondY = height * 0.88;
+                const pondRad = width * 0.25;
+                const distToPond = Math.hypot(this.x - pondX, this.y - pondY);
+                const inPond = distToPond < pondRad;
+
+                if (this.isMelting) {
+                    this.meltProgress += dt / 2000;
+                    if (this.meltProgress >= 1) {
+                        this.isMelting = false;
+                        this.isPuddle = true;
+                        this.meltProgress = 1;
+                    }
+                    return;
+                }
+
+                if (this.isPuddle) {
+                    return;
+                }
+
+                if (this.onFire) {
+                    this.firePanicTimer -= dt;
+                    
+                    if (this.firePanicTimer > 4000) {
+                        // Phase 1: Panic movement away/around excluding pond
+                        this.fireTargetTimer -= dt;
+                        if (this.fireTargetTimer <= 0) {
+                            this.fireTargetAngle = Math.random() * Math.PI * 2;
+                            this.fireTargetTimer = 300 + Math.random() * 500;
+                        }
+                        
+                        let nextX = this.x + Math.cos(this.fireTargetAngle) * this.baseSpeed * 4 * (dt/16);
+                        let nextY = this.y + Math.sin(this.fireTargetAngle) * this.baseSpeed * 4 * (dt/16);
+                        
+                        // Avoid Pond
+                        const nextDist = Math.hypot(nextX - pondX, nextY - pondY);
+                        if (nextDist < pondRad + 20) {
+                            this.fireTargetAngle += Math.PI; // Bounce back
+                        } else {
+                            this.x = Math.max(0, Math.min(width, nextX));
+                            this.y = Math.max(height * 0.62, Math.min(height, nextY));
+                        }
+                    } else {
+                        // Phase 2: Run to pond
+                        const angle = Math.atan2(pondY - this.y, pondX - this.x);
+                        this.x += Math.cos(angle) * this.baseSpeed * 4 * (dt / 16);
+                        this.y += Math.sin(angle) * this.baseSpeed * 4 * (dt / 16);
+                    }
+                    
+                    this.wobble += this.wobbleSpeed * 4;
+                    
+                    if (inPond && this.firePanicTimer <= 4000) {
+                        this.onFire = false;
+                        this.quenchTimer = 3000;
+                        this.state = 'sitting';
+                        this.stateTimer = 3000;
+                    }
+                    
+                    if (Math.random() < 0.6) {
+                        const fx = this.x + (Math.random() - 0.5) * this.radius;
+                        const fy = this.y - Math.random() * this.radius;
+                        particles.push(new Particle(fx, fy, Math.random() > 0.5 ? '#f97316' : '#ef4444', true));
+                    }
+                } else if (this.quenchTimer > 0) {
+                    this.quenchTimer -= dt;
+                    this.speed = 0;
+                } else {
+                    this.speed = inPond ? this.baseSpeed * 0.5 : this.baseSpeed;
+                    if (this.isFlattened) this.speed *= 0.15;
+
+                    if (this.state === 'walking') {
+                        this.x += this.speed * (dt / 16);
+                        this.wobble += this.wobbleSpeed * (this.speed / this.baseSpeed);
+                        this.legCycle += (this.isBaby ? 0.25 : 0.12) * (this.speed / this.baseSpeed);
+                        
+                        if (Math.random() < (1 / (60 * 20)) && !this.isFlattened) {
+                            this.state = 'sitting';
+                            this.stateTimer = 2500 + Math.random() * 3500;
+                        }
+                    } else if (this.state === 'sitting') {
+                        if (this.stateTimer <= 0) {
+                            this.state = 'walking';
+                        }
+                    }
+                }
+
+                this.onScreen = (this.x + this.radius > 0 && this.x - this.radius < width);
+
+                if (this.x > width + this.radius * 4) {
+                    if (this.isSwarmMember) {
+                        const idx = ducks.indexOf(this);
+                        if (idx > -1) ducks.splice(idx, 1);
+                    } else {
+                        this.reset();
+                    }
+                }
+            }
+
+            draw(targetCtx = ctx, overrideX = 0, overrideY = 0, overrideRadius = null) {
+                const activeX = overrideX || this.x;
+                const activeY = overrideY || this.y;
+                const activeRadius = overrideRadius || this.radius;
+                
+                const bounce = this.state === 'walking' ? Math.abs(Math.sin(this.wobble)) * (this.isBaby ? 2 : 3) : 0;
+                const sitOffset = this.state === 'sitting' ? activeRadius * 0.15 : 0;
+                const inPond = !overrideX && (Math.hypot(this.x - width * 0.3, this.y - height * 0.88) < width * 0.25);
+                
+                targetCtx.save();
+                targetCtx.translate(activeX, activeY + bounce + sitOffset);
+                
+                if (this.isMelting) {
+                    targetCtx.scale(1 + this.meltProgress * 0.8, 1 - this.meltProgress * 0.9);
+                } else if (this.isPuddle) {
+                    targetCtx.scale(2.2, 0.2);
+                } else if (this.isFlattened) {
+                    targetCtx.scale(1.5, 0.4);
+                }
+
+                if (this.isRainbow) {
+                    const hue = (Date.now() / 10) % 360;
+                    this.bodyColor = `hsl(${hue}, 80%, 60%)`;
+                    this.headColor = `hsl(${(hue + 40) % 360}, 80%, 40%)`;
+                }
+
+                if (!inPond && !this.isPuddle && !this.isMelting) {
+                    targetCtx.fillStyle = 'rgba(0,0,0,0.15)';
+                    targetCtx.beginPath();
+                    targetCtx.ellipse(0, activeRadius * 0.8 - bounce, activeRadius * 0.8, activeRadius * 0.3, 0, 0, Math.PI * 2);
+                    targetCtx.fill();
+                }
+
+                if (this.state === 'walking' && !inPond && !this.isFlattened && !this.isPuddle && !this.isMelting) {
+                    targetCtx.strokeStyle = this.isPenguin ? '#f97316' : '#ea580c';
+                    targetCtx.lineWidth = this.isBaby ? 2 : 4;
+                    if (this.isGiant) targetCtx.lineWidth *= 1.5;
+                    targetCtx.lineCap = 'round';
+                    for (let i = 0; i < 2; i++) {
+                        const phase = i * Math.PI;
+                        const legX = (i === 0 ? -activeRadius * 0.3 : activeRadius * 0.1);
+                        const legY = Math.sin(this.legCycle + phase) * (this.isBaby ? 4 : 8);
+                        targetCtx.beginPath();
+                        targetCtx.moveTo(legX, activeRadius * 0.4);
+                        if (this.isBaby) targetCtx.lineTo(legX, activeRadius * 0.8 + legY);
+                        else {
+                            targetCtx.lineTo(legX - 2, activeRadius * 0.7 + legY);
+                            targetCtx.lineTo(legX + 4, activeRadius * 1.1 + legY);
+                        }
+                        targetCtx.stroke();
+                    }
+                }
+
+                const bodyGrad = targetCtx.createRadialGradient(-5, -5, 0, 0, 0, activeRadius);
+                if (this.isRainbow) {
+                    bodyGrad.addColorStop(0, this.bodyColor);
+                    bodyGrad.addColorStop(1, this.headColor);
+                } else if (this.isGolden) {
+                    bodyGrad.addColorStop(0, '#fef08a');
+                    bodyGrad.addColorStop(0.5, '#fbbf24');
+                    bodyGrad.addColorStop(1, '#d97706');
+                    targetCtx.shadowBlur = 10;
+                    targetCtx.shadowColor = 'rgba(234,179,8,0.5)';
+                } else if (this.isBaby) {
+                    bodyGrad.addColorStop(0, '#fef08a');
+                    bodyGrad.addColorStop(1, '#fde047');
+                } else if (this.isPuddle || this.isMelting) {
+                    bodyGrad.addColorStop(0, '#78350f');
+                    bodyGrad.addColorStop(1, '#451a03');
+                } else if (this.isPenguin) {
+                    bodyGrad.addColorStop(0, '#475569');
+                    bodyGrad.addColorStop(1, '#1e293b');
+                } else {
+                    bodyGrad.addColorStop(0, '#a8a29e');
+                    bodyGrad.addColorStop(0.7, '#57534e');
+                    bodyGrad.addColorStop(1, '#44403c');
+                }
+                
+                targetCtx.fillStyle = bodyGrad;
+                targetCtx.beginPath();
+                if (this.isPenguin) {
+                    targetCtx.ellipse(0, 0, activeRadius * 0.9, activeRadius * 1.5, 0, 0, Math.PI * 2);
+                } else {
+                    targetCtx.ellipse(0, 0, activeRadius * (this.isBaby ? 1.1 : 1.3), activeRadius * 0.8, 0, 0, Math.PI * 2);
+                }
+                targetCtx.fill();
+
+                // Penguin Belly
+                if (this.isPenguin && !this.isPuddle && !this.isMelting) {
+                    targetCtx.fillStyle = '#f8fafc';
+                    targetCtx.beginPath();
+                    targetCtx.ellipse(activeRadius * 0.1, 0, activeRadius * 0.6, activeRadius * 1.2, 0, 0, Math.PI * 2);
+                    targetCtx.fill();
+                }
+
+                if (!this.isPuddle) {
+                    if (this.isPenguin) {
+                        // Penguin Head
+                        const hx = activeRadius * 0.1;
+                        const hy = -activeRadius * 1.6;
+                        targetCtx.fillStyle = '#1e293b';
+                        targetCtx.beginPath();
+                        targetCtx.arc(hx, hy, activeRadius * 0.7, 0, Math.PI * 2);
+                        targetCtx.fill();
+
+                        // Beak
+                        targetCtx.fillStyle = '#fbbf24';
+                        targetCtx.beginPath();
+                        targetCtx.moveTo(hx + activeRadius * 0.4, hy + activeRadius * 0.1);
+                        targetCtx.lineTo(hx + activeRadius * 1.1, hy + activeRadius * 0.2);
+                        targetCtx.lineTo(hx + activeRadius * 0.4, hy + activeRadius * 0.4);
+                        targetCtx.fill();
+
+                        // Eyes
+                        targetCtx.fillStyle = 'white';
+                        targetCtx.beginPath();
+                        targetCtx.arc(hx + activeRadius * 0.3, hy - activeRadius * 0.1, activeRadius * 0.15, 0, Math.PI * 2);
+                        targetCtx.fill();
+                        targetCtx.fillStyle = 'black';
+                        targetCtx.beginPath();
+                        targetCtx.arc(hx + activeRadius * 0.35, hy - activeRadius * 0.1, activeRadius * 0.08, 0, Math.PI * 2);
+                        targetCtx.fill();
+
+                    } else {
+                        targetCtx.fillStyle = this.isBaby ? '#facc15' : (this.isGolden ? '#f59e0b' : '#44403c');
+                        if (this.isMelting) targetCtx.fillStyle = '#451a03';
+                        targetCtx.beginPath();
+                        targetCtx.ellipse(-activeRadius * 0.3, 0, activeRadius * (this.isBaby ? 0.6 : 0.8), activeRadius * (this.isBaby ? 0.5 : 0.35), 0.15, 0, Math.PI * 2);
+                        targetCtx.fill();
+
+                        const neckX = this.isBaby ? activeRadius * 0.9 : activeRadius * 0.95; 
+                        targetCtx.fillStyle = this.isMelting ? '#451a03' : this.headColor;
+                        targetCtx.beginPath();
+                        targetCtx.ellipse(neckX, -activeRadius * 0.4, activeRadius * 0.3, activeRadius * (this.isBaby ? 0.4 : 0.8), -0.3, 0, Math.PI * 2);
+                        targetCtx.fill();
+
+                        if (this.isBaby || this.isGolden || this.isRainbow) {
+                            targetCtx.fillStyle = this.isMelting ? '#451a03' : this.headColor;
+                            targetCtx.beginPath();
+                            targetCtx.arc(activeRadius * 1.0, -activeRadius * 0.8, activeRadius * 0.6, 0, Math.PI * 2);
+                            targetCtx.fill();
+                            this.curHeadX = activeRadius * 1.0;
+                            this.curHeadY = -activeRadius * 0.8;
+                        } else {
+                            const hx = activeRadius * 1.15; 
+                            const hy = -activeRadius * 1.3;
+                            targetCtx.fillStyle = this.isMelting ? '#451a03' : '#064e3b';
+                            targetCtx.beginPath();
+                            targetCtx.arc(hx, hy, activeRadius * 0.4, 0, Math.PI * 2);
+                            targetCtx.fill();
+                            this.curHeadX = hx;
+                            this.curHeadY = hy;
+                        }
+
+                        if (!this.isMelting) {
+                            targetCtx.fillStyle = this.isBaby ? '#f97316' : '#eab308';
+                            targetCtx.beginPath();
+                            targetCtx.moveTo(this.curHeadX + activeRadius * 0.3, this.curHeadY);
+                            targetCtx.quadraticCurveTo(this.curHeadX + activeRadius * 0.8, this.curHeadY + activeRadius * 0.1, this.curHeadX + activeRadius * 0.3, this.curHeadY + activeRadius * 0.2);
+                            targetCtx.fill();
+                            
+                            targetCtx.fillStyle = 'white';
+                            targetCtx.beginPath();
+                            targetCtx.arc(this.curHeadX + activeRadius * 0.15, this.curHeadY - activeRadius * 0.1, Math.max(1, activeRadius * 0.125), 0, Math.PI * 2);
+                            targetCtx.fill();
+                            targetCtx.fillStyle = 'black';
+                            targetCtx.beginPath();
+                            targetCtx.arc(this.curHeadX + activeRadius * 0.15 + 0.5, this.curHeadY - activeRadius * 0.1 + 0.2, Math.max(0.5, activeRadius * 0.06), 0, Math.PI * 2);
+                            targetCtx.fill();
+                        }
+                    }
+                }
+
+                if (this.onFire) {
+                    const time = Date.now() / 100;
+                    for(let i=0; i<8; i++) {
+                        const offX = Math.sin(time + i) * activeRadius * 0.8;
+                        const offY = -Math.cos(time + i) * activeRadius * 0.5 - activeRadius * 0.4;
+                        const fireSize = 3 + Math.sin(time * 2 + i) * 3;
+                        
+                        targetCtx.fillStyle = i % 3 === 0 ? '#ef4444' : (i % 3 === 1 ? '#f59e0b' : '#fef08a');
+                        targetCtx.beginPath();
+                        targetCtx.arc(offX, offY - Math.random() * 10, fireSize, 0, Math.PI*2);
+                        targetCtx.fill();
+                    }
+                }
+
+                targetCtx.restore();
+            }
+
+            checkHit(mx, my, isAoE = false) {
+                const yOff = (this.isPuddle || this.isMelting) ? 0.1 : (this.isBaby ? 0.4 : 0.6);
+                const dist = Math.hypot(this.x - mx, (this.y - this.radius * yOff) - my);
+                const radiusThreshold = isAoE ? 150 : (this.isPuddle ? this.radius * 2.5 : this.radius * 2.0);
+                
+                if (dist < radiusThreshold) {
+                    if (this.isMelting) return false; // Invulnerable while melting
+                    
+                    if (isGoldPaintActive && goldPaintAmmo > 0 && !this.isPuddle) {
+                        this.isGolden = true;
+                        this.isRainbow = false;
+                        this.updateColors();
+                        goldPaintAmmo--;
+                        isGoldPaintActive = false;
+                        updateUI();
+                        playUISound('select');
+                        return true;
+                    }
+                    if (isRainbowPaintActive && rainbowPaintAmmo > 0 && !this.isPuddle) {
+                        this.isRainbow = true;
+                        this.isGolden = false;
+                        this.updateColors();
+                        rainbowPaintAmmo--;
+                        isRainbowPaintActive = false;
+                        updateUI();
+                        playUISound('select');
+                        return true;
+                    }
+                    if (isHammerActive && !this.isFlattened && !this.isPuddle) {
+                        this.isFlattened = true;
+                        playUISound('hammer');
+                        return true;
+                    }
+                    this.explode(isAoE);
+                    return true;
+                }
+                return false;
+            }
+
+            explode(isAoE = false) {
+                let multiplier = 1;
+                if (this.isFlattened) multiplier *= 5;
+                if (this.isPuddle) multiplier *= 10;
+                if (this.isGolden) multiplier *= 5;
+                if (this.isRainbow) multiplier *= 25;
+                if (this.onFire) multiplier *= 2;
+                if (this.isGiant) multiplier *= 2;
+                if (this.isTiny) multiplier *= 0.5;
+                
+                let speciesReward = this.isPenguin ? 50000 : (this.isBaby ? 2 : 1);
+
+                score++;
+                coins += Math.ceil(speciesReward * multiplier);
+                scoreEl.textContent = score.toString().padStart(3, '0');
+                coinsEl.textContent = coins;
+                playExplosionSound(isAoE ? 2.5 : 1.0);
+                
+                puddles.push({
+                    x: this.x,
+                    y: this.y + (this.isFlattened || this.isPuddle ? 0 : this.radius * 0.5),
+                    radius: this.radius * (this.isPuddle ? 2.2 : (this.isFlattened ? 1.5 : 1.0)),
+                    life: 2000,
+                    maxLife: 2000,
+                    color: this.isPuddle ? 'rgba(69, 26, 3, 0.8)' : (this.isRainbow ? 'rgba(168, 85, 247, 0.4)' : (this.isGolden ? 'rgba(234, 179, 8, 0.4)' : 'rgba(153, 27, 27, 0.6)'))
+                });
+
+                const countMult = this.isBaby ? 0.4 : 1.0;
+                const pCount = isAoE ? 120 : 50;
+                for (let i = 0; i < pCount * countMult; i++) {
+                    particles.push(new Particle(this.x, this.y, this.isPuddle ? '#451a03' : (this.isGolden ? '#facc15' : (this.isRainbow ? `hsl(${Math.random()*360}, 100%, 50%)` : '#991b1b')), this.isBaby, isAoE)); 
+                }
+
+                if (this.isSwarmMember) {
+                    const idx = ducks.indexOf(this);
+                    if (idx > -1) ducks.splice(idx, 1);
+                } else this.reset();
+            }
+        }
+
+        // --- Particle System ---
+        class Particle {
+            constructor(x, y, color, isBaby = false, isHeavy = false) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                const angle = Math.random() * Math.PI * 2;
+                const force = (isBaby ? 1.5 : 2) + Math.random() * (isBaby ? 4 : (isHeavy ? 15 : 8));
+                this.vx = Math.cos(angle) * force;
+                this.vy = Math.sin(angle) * force;
+                this.life = 1.0;
+                this.decay = (isHeavy ? 0.005 : 0.01) + Math.random() * 0.03;
+                this.gravity = 0.15;
+                this.size = (isBaby ? 1 : 2) + Math.random() * (isBaby ? 2 : (isHeavy ? 6 : 4));
+            }
+
+            update() {
+                this.vx *= 0.98;
+                this.vy += this.gravity;
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life -= this.decay;
+            }
+
+            draw() {
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        // --- Core Engine ---
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            flowers.length = 0;
+            initFlowers();
+            initTrees();
+        }
+
+        function drawEnvironment() {
+            const skyGrad = ctx.createLinearGradient(0, 0, 0, height * 0.6);
+            skyGrad.addColorStop(0, '#bae6fd');
+            skyGrad.addColorStop(1, '#f0f9ff');
+            ctx.fillStyle = skyGrad;
+            ctx.fillRect(0, 0, width, height);
+
+            // Sun
+            const sunX = width * 0.85;
+            const sunY = height * 0.15;
+            const sunRad = 50;
+            const sunGrad = ctx.createRadialGradient(sunX, sunY, 5, sunX, sunY, sunRad);
+            sunGrad.addColorStop(0, '#fef08a');
+            sunGrad.addColorStop(1, '#facc15');
+            ctx.fillStyle = sunGrad;
+            if (sunCooldown > 0) ctx.globalAlpha = 0.5;
+            ctx.beginPath();
+            ctx.arc(sunX, sunY, sunRad, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+
+            clouds.forEach(c => {
+                ctx.fillStyle = 'rgba(255,255,255,0.7)';
+                ctx.beginPath();
+                ctx.ellipse(c.x, c.y, c.w, c.w * 0.3, 0, 0, Math.PI * 2);
+                ctx.fill();
+                c.x += c.s;
+                if (c.x - c.w > width) c.x = -c.w;
+            });
+
+            // Trees
+            treeVariations.forEach(t => {
+                ctx.save();
+                ctx.translate(t.x, t.y);
+                ctx.scale(t.scale, t.scale);
+                ctx.fillStyle = t.trunkColor;
+                ctx.fillRect(-t.trunkWidth/2, 0, t.trunkWidth, 45);
+                ctx.fillStyle = t.color;
+                for(let j=0; j < t.layers; j++) {
+                    const y = -(j * 15);
+                    const w = t.width - (j * 10);
+                    ctx.beginPath();
+                    ctx.moveTo(-w/2, y);
+                    ctx.lineTo(0, y - t.height);
+                    ctx.lineTo(w/2, y);
+                    ctx.fill();
+                }
+                ctx.restore();
+            });
+            
+            const grassGrad = ctx.createLinearGradient(0, height * 0.6, 0, height);
+            grassGrad.addColorStop(0, '#4ade80');
+            grassGrad.addColorStop(1, '#16a34a');
+            ctx.fillStyle = grassGrad;
+            ctx.fillRect(0, height * 0.6, width, height * 0.4);
+
+            // Water
+            const pondGrad = ctx.createRadialGradient(width * 0.3, height * 0.88, 0, width * 0.3, height * 0.88, width * 0.25);
+            pondGrad.addColorStop(0, '#38bdf8');
+            pondGrad.addColorStop(1, '#0284c7');
+            ctx.fillStyle = pondGrad;
+            ctx.beginPath();
+            ctx.ellipse(width * 0.3, height * 0.88, width * 0.25, height * 0.12, 0.05, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // --- Shop & Utility Logic ---
+        function buyItem(item) {
+            initAudio();
+            if (item === 'win' && coins >= 1000000) {
+                coins -= 1000000;
+                showWinScreen();
+            } else if (item === 'autoclick' && coins >= autoClickCost && autoClickAmount < 16) {
+                coins -= autoClickCost;
+                autoClickAmount = autoClickAmount === 0 ? 1 : autoClickAmount * 2;
+                autoClickCost *= 2;
+                playUISound('buy');
+                updateUI();
+            } else if (item === 'spawnrate' && coins >= spawnRateCost && spawnRateAmount < 16) {
+                coins -= spawnRateCost;
+                spawnRateAmount = spawnRateAmount === 0 ? 1 : spawnRateAmount * 2;
+                spawnRateCost *= 2;
+                playUISound('buy');
+                updateUI();
+            } else if (item === 'bazooka' && coins >= 10) {
+                coins -= 10;
+                bazookaAmmo++;
+                playUISound('buy');
+                updateUI();
+            } else if (item === 'goldPaint' && coins >= 500) {
+                coins -= 500;
+                goldPaintAmmo++;
+                playUISound('buy');
+                updateUI();
+            } else if (item === 'rainbowPaint' && coins >= 2500) {
+                coins -= 2500;
+                rainbowPaintAmmo++;
+                playUISound('buy');
+                updateUI();
+            } else if (item === 'hammer' && coins >= 500 && !hasHammer) {
+                coins -= 500;
+                hasHammer = true;
+                playUISound('buy');
+                updateUI();
+            } else if (item === 'call' && coins >= 300 && !hasCallTool) {
+                coins -= 300;
+                hasCallTool = true;
+                playUISound('buy');
+                updateUI();
+            } else if (item === 'device' && coins >= 20 && deviceCount < 10) {
+                coins -= 20;
+                deviceCount++;
+                babyChance = Math.min(0.7, babyChance + 0.05); 
+                playUISound('buy');
+                updateUI();
+            }
+        }
+
+        function showWinScreen() {
+            document.getElementById('win-screen').classList.remove('hidden');
+            document.getElementById('game-ui').classList.add('hidden');
+            document.getElementById('win-text').textContent = `You win, but the ${score} animals didn't, did they?`;
+            playUISound('melt');
+        }
+
+        function triggerCall(type) {
+            initAudio();
+            if (type === 'swarm' && swarmCooldown <= 0) {
+                const mutation = document.getElementById('mutation-selector').value;
+                const costs = { 'none': 0, 'baby': 100, 'gold': 250, 'rainbow': 3000, 'flat': 300 };
+                const cost = costs[mutation];
+
+                if (coins >= cost) {
+                    coins -= cost;
+                    playUISound('call');
+                    swarmCooldown = 20000; 
+                    for (let i = 0; i < 40; i++) ducks.push(new Duck(true, mutation));
+                    document.getElementById('call-modal').classList.add('hidden');
+                    updateUI();
+                } else {
+                    playUISound('click');
+                }
+            } else if (type === 'upgrade') {
+                if (coins >= spawnCapCost) {
+                    coins -= spawnCapCost;
+                    spawnCap++;
+                    spawnCapCost = Math.round(spawnCapCost * 1.25);
+                    playUISound('buy');
+                    updateUI();
+                    if (ducks.filter(d => !d.isSwarmMember).length < spawnCap) ducks.push(new Duck());
+                }
+            }
+        }
+
+        function updateUI() {
+            coinsEl.textContent = coins;
+            deviceCountEl.textContent = deviceCount;
+            bazookaCountEl.textContent = bazookaAmmo;
+            goldPaintCountEl.textContent = goldPaintAmmo;
+            rainbowPaintCountEl.textContent = rainbowPaintAmmo;
+            document.getElementById('max-cap-label').textContent = spawnCap;
+            document.getElementById('cap-cost').textContent = spawnCapCost;
+            
+            // Autoclicker UI
+            document.getElementById('autoclick-desc').textContent = `Clicks ${autoClickAmount === 0 ? 1 : autoClickAmount} duck/sec`;
+            document.getElementById('autoclick-cost').textContent = autoClickAmount >= 16 ? "MAX" : `${autoClickCost}c`;
+            if(autoClickAmount >= 16) document.getElementById('btn-autoclick').classList.add('opacity-50', 'pointer-events-none');
+
+            // Spawn Rate UI
+            document.getElementById('spawnrate-desc').textContent = `Spawns ${spawnRateAmount === 0 ? 1 : spawnRateAmount} duck/sec`;
+            document.getElementById('spawnrate-cost').textContent = spawnRateAmount >= 16 ? "MAX" : `${spawnRateCost}c`;
+            if(spawnRateAmount >= 16) document.getElementById('btn-spawnrate').classList.add('opacity-50', 'pointer-events-none');
+
+            const bSlot = document.getElementById('slot-bazooka');
+            if (bazookaAmmo > 0) bSlot.classList.remove('hidden');
+            else { bSlot.classList.add('hidden'); isBazookaActive = false; }
+            bSlot.classList.toggle('active', isBazookaActive);
+
+            const gSlot = document.getElementById('slot-goldPaint');
+            if (goldPaintAmmo > 0) gSlot.classList.remove('hidden');
+            else { gSlot.classList.add('hidden'); isGoldPaintActive = false; }
+            gSlot.classList.toggle('active', isGoldPaintActive);
+
+            const rSlot = document.getElementById('slot-rainbowPaint');
+            if (rainbowPaintAmmo > 0) rSlot.classList.remove('hidden');
+            else { rSlot.classList.add('hidden'); isRainbowPaintActive = false; }
+            rSlot.classList.toggle('active', isRainbowPaintActive);
+
+            const hSlot = document.getElementById('slot-hammer');
+            if (hasHammer) hSlot.classList.remove('hidden');
+            hSlot.classList.toggle('active', isHammerActive);
+
+            if (hasCallTool) document.getElementById('call-toggle').classList.remove('hidden');
+            if (deviceCount >= 10) document.getElementById('btn-device').classList.add('opacity-50', 'pointer-events-none');
+            if (hasHammer) document.getElementById('btn-hammer').classList.add('opacity-50', 'pointer-events-none');
+
+            const cdOverlay = document.getElementById('call-cd-overlay');
+            const swarmBtn = document.getElementById('swarm-btn');
+            if (swarmCooldown > 0) {
+                cdOverlay.classList.remove('hidden');
+                cdOverlay.textContent = Math.ceil(swarmCooldown / 1000) + 's';
+                swarmBtn.disabled = true;
+            } else {
+                cdOverlay.classList.add('hidden');
+                swarmBtn.disabled = false;
+            }
+        }
+
+        function renderWikiDucks() {
+            const previews = document.querySelectorAll('.wiki-duck-preview');
+            previews.forEach(p => {
+                const type = p.getAttribute('data-type');
+                const pCtx = p.getContext('2d');
+                pCtx.clearRect(0, 0, 60, 60);
+                const mockDuck = new Duck();
+                mockDuck.isPenguin = (type === 'penguin');
+                mockDuck.isBaby = (type === 'baby');
+                mockDuck.isGolden = (type === 'gold');
+                mockDuck.isRainbow = (type === 'rainbow');
+                mockDuck.isFlattened = (type === 'flat');
+                mockDuck.isPuddle = (type === 'puddle');
+                mockDuck.onFire = (type === 'fire');
+                mockDuck.isGiant = (type === 'giant');
+                mockDuck.isTiny = (type === 'tiny');
+                
+                mockDuck.radius = (mockDuck.isBaby ? 10 : 15);
+                if (mockDuck.isGiant) mockDuck.radius *= 1.8;
+                if (mockDuck.isTiny) mockDuck.radius *= 0.6;
+                if (mockDuck.isPenguin) mockDuck.radius *= 1.2;
+                
+                mockDuck.updateColors();
+                mockDuck.draw(pCtx, 30, 35, mockDuck.radius);
+            });
+        }
+
+        // --- Debug System Logic ---
+        function addDebugCoins() {
+            const amt = parseInt(document.getElementById('debug-coins-input').value) || 0;
+            coins += amt;
+            updateUI();
+            playUISound('buy');
+        }
+
+        document.getElementById('footer-tip').addEventListener('click', () => {
+            if (spawnCap >= 10) {
+                document.getElementById('debug-toggle').classList.remove('hidden');
+                playUISound('buy');
+            }
+        });
+
+        // FIXED: Interaction between mutually exclusive mutations to prevent spawn halting
+        const debugMutSelect = document.getElementById('debug-mutation');
+        debugMutSelect.addEventListener('change', () => {
+            const selected = Array.from(debugMutSelect.selectedOptions).map(o => o.value);
+            if (selected.includes('gold') && selected.includes('rainbow')) {
+                // Gold takes priority, deselect Rainbow
+                for (let i = 0; i < debugMutSelect.options.length; i++) {
+                    if (debugMutSelect.options[i].value === 'rainbow') {
+                        debugMutSelect.options[i].selected = false;
+                    }
+                }
+            }
+        });
+
+        document.getElementById('debug-toggle').addEventListener('click', () => {
+            initAudio(); playUISound('click'); document.getElementById('debug-modal').classList.remove('hidden');
+        });
+        document.getElementById('close-debug').addEventListener('click', () => {
+            playUISound('click'); document.getElementById('debug-modal').classList.add('hidden');
+        });
+
+        document.getElementById('shop-toggle').addEventListener('click', () => {
+            initAudio(); playUISound('click'); document.getElementById('shop-modal').classList.remove('hidden');
+        });
+        document.getElementById('close-shop').addEventListener('click', () => {
+            playUISound('click'); document.getElementById('shop-modal').classList.add('hidden');
+        });
+        document.getElementById('call-toggle').addEventListener('click', () => {
+            initAudio(); playUISound('click'); document.getElementById('call-modal').classList.remove('hidden');
+        });
+        document.getElementById('close-call').addEventListener('click', () => {
+            playUISound('click'); document.getElementById('call-modal').classList.add('hidden');
+        });
+        document.getElementById('wiki-toggle').addEventListener('click', () => {
+            initAudio(); playUISound('click'); renderWikiDucks(); document.getElementById('wiki-modal').classList.remove('hidden');
+        });
+        document.getElementById('close-wiki').addEventListener('click', () => {
+            playUISound('click'); document.getElementById('wiki-modal').classList.add('hidden');
+        });
+
+        document.getElementById('slot-bazooka').addEventListener('click', (e) => {
+            e.stopPropagation(); initAudio(); if (bazookaAmmo > 0) {
+                isBazookaActive = !isBazookaActive; isHammerActive = isGoldPaintActive = isRainbowPaintActive = false;
+                playUISound('select'); updateUI();
+            }
+        });
+        document.getElementById('slot-goldPaint').addEventListener('click', (e) => {
+            e.stopPropagation(); initAudio(); if (goldPaintAmmo > 0) {
+                isGoldPaintActive = !isGoldPaintActive; isHammerActive = isBazookaActive = isRainbowPaintActive = false;
+                playUISound('select'); updateUI();
+            }
+        });
+        document.getElementById('slot-rainbowPaint').addEventListener('click', (e) => {
+            e.stopPropagation(); initAudio(); if (rainbowPaintAmmo > 0) {
+                isRainbowPaintActive = !isRainbowPaintActive; isHammerActive = isBazookaActive = isGoldPaintActive = false;
+                playUISound('select'); updateUI();
+            }
+        });
+        document.getElementById('slot-hammer').addEventListener('click', (e) => {
+            e.stopPropagation(); initAudio(); if (hasHammer) {
+                isHammerActive = !isHammerActive; isBazookaActive = isGoldPaintActive = isRainbowPaintActive = false;
+                playUISound('select'); updateUI();
+            }
+        });
+
+        function init() {
+            resize();
+            for (let i = 0; i < spawnCap; i++) setTimeout(() => ducks.push(new Duck()), i * 900);
+            lucide.createIcons();
+            requestAnimationFrame(loop);
+        }
+
+        function loop(time) {
+            const dt = time - lastTime;
+            lastTime = time;
+
+            // Handle Autoclicker Logic
+            if (autoClickAmount > 0) {
+                autoClickTimer += dt;
+                const interval = 1000 / autoClickAmount;
+                if (autoClickTimer >= interval) {
+                    autoClickTimer -= interval;
+                    // Click one on-screen duck
+                    const target = ducks.find(d => d.onScreen && !d.isDead && !d.isMelting);
+                    if (target) {
+                        target.checkHit(target.x, target.y);
+                    }
+                }
+            }
+
+            // Handle Spawn Rate Logic
+            if (spawnRateAmount > 0) {
+                spawnRateTimer += dt;
+                const spawnInterval = 1000 / spawnRateAmount;
+                if (spawnRateTimer >= spawnInterval) {
+                    spawnRateTimer -= spawnInterval;
+                    ducks.push(new Duck(true)); // Treat as swarm member so it's disposable
+                }
+            }
+
+            if (swarmCooldown > 0) {
+                swarmCooldown -= dt;
+                if (swarmCooldown <= 0) { swarmCooldown = 0; updateUI(); }
+                else if (Math.floor((swarmCooldown + dt) / 1000) !== Math.floor(swarmCooldown / 1000)) updateUI();
+            }
+            if (sunCooldown > 0) sunCooldown -= dt;
+
+            drawEnvironment();
+            for (let i = puddles.length - 1; i >= 0; i--) {
+                const p = puddles[i]; p.life -= dt;
+                ctx.fillStyle = p.color; ctx.beginPath();
+                ctx.ellipse(p.x, p.y, p.radius, p.radius * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+                if (p.life <= 0) puddles.splice(i, 1);
+            }
+            let onScreenCount = 0;
+            ducks.forEach(duck => {
+                duck.update(dt); duck.draw();
+                if (duck.onScreen) onScreenCount++;
+            });
+            countEl.textContent = onScreenCount;
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i]; p.update(); p.draw();
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+            requestAnimationFrame(loop);
+        }
+
+        window.addEventListener('resize', resize);
+        window.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.ui-panel') || e.target.closest('.shop-btn')) return;
+            initAudio();
+
+            // Check Sun Click
+            const sunX = width * 0.85;
+            const sunY = height * 0.15;
+            if (Math.hypot(e.clientX - sunX, e.clientY - sunY) < 50 && sunCooldown <= 0) {
+                const pondX = width * 0.3;
+                const pondY = height * 0.88;
+                const pondRad = width * 0.25;
+
+                const eligibleDucks = ducks.filter(d => {
+                    const distToPond = Math.hypot(d.x - pondX, d.y - pondY);
+                    return d.onScreen && !d.onFire && !d.isPuddle && !d.isMelting && (distToPond >= pondRad);
+                });
+
+                if (eligibleDucks.length > 0) {
+                    const target = eligibleDucks[Math.floor(Math.random() * eligibleDucks.length)];
+                    
+                    if (Math.random() < 0.2) {
+                        target.isMelting = true;
+                        target.meltProgress = 0;
+                        playUISound('melt');
+                    } else {
+                        target.onFire = true;
+                        target.firePanicTimer = 8000; // 4s roam + run
+                        target.fireTargetTimer = 0;
+                        playUISound('fire');
+                    }
+                    sunCooldown = 5000;
+                }
+                return;
+            }
+
+            if (isBazookaActive && bazookaAmmo > 0) {
+                ducks.forEach(duck => duck.checkHit(e.clientX, e.clientY, true));
+                bazookaAmmo--; isBazookaActive = false; updateUI();
+            } else { ducks.forEach(duck => duck.checkHit(e.clientX, e.clientY)); }
+        });
+        init();
+    </script>
+</body>
+</html>
